@@ -41,7 +41,7 @@ extern "C"
     void EndPrimitive(ft800 *Device);
 
     /* NOTE(js): Execute/Run the commands stored in the display list
-    * locally on the FT800 chip. */
+     * locally on the FT800 chip. */
     void ExecuteDisplayList(ft800 *Device);
 };
 

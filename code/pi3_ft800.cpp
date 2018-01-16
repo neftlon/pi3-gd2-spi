@@ -222,7 +222,7 @@ InitDevice(ft800 *Device)
 
 int Prepare(ft800 *Device, int SPIChannel, int SPIConnectionSpeed)
 {
-    int Result = 0;
+    int Result = 1;
     if(Device)
     {
         EstablishSPIConnection(Device,
@@ -230,7 +230,7 @@ int Prepare(ft800 *Device, int SPIChannel, int SPIConnectionSpeed)
         if(Device->FileDesc != -1)
         {
             InitDevice(Device);
-            Result = -1; // NOTE(js): Operation/Initialisation failed
+            Result = 0; // NOTE(js): Operation/Initialisation failed
         }
         else
         {
