@@ -8,7 +8,7 @@
    ======================================================================== */
 /*
   NOTE(js): Most operations/names/values are directly borrowed from
-  the official FT800 documentation an programmers guide (1 and 2).
+  the official FT800 documentation and programmers guide (1 and 2).
    (1) <http://brtchip.com/wp-content/uploads/Support/Documentation/
         Datasheets/ICs/EVE/DS_FT800_Embedded_Video_Engine.pdf>
    (2) <http://brtchip.com/wp-content/uploads/Support/Documentation/
@@ -64,7 +64,7 @@
 #define PRIMITIVE_TYPE_POINTS 2 // Point drawing primitive
 #define PRIMITIVE_TYPE_LINES 3 // Line drawing primitive
 #define PRIMITIVE_TYPE_LINE_STRIP 4 // Line strip drawing primitive
-#define PRIMITIVE_TYPE_EDGE_STRIP_R 5 //Edge strip right side drawing primitive
+#define PRIMITIVE_TYPE_EDGE_STRIP_R 5 // Edge strip right side drawing primitive
 #define PRIMITIVE_TYPEEDGE_STRIP_L 6 // Edge strip left side drawing primitive
 #define PRIMITIVE_TYPE_EDGE_STRIP_A 7 // Edge strip above drawing primitive
 #define PRIMITIVE_TYPE_EDGE_STRIP_B 8 // Edge strip below side drawing primitive
@@ -96,8 +96,10 @@ GetDisplayListUsedMemory(ft800 *Device)
     return(Result);
 }
 
+#if defined(__cplusplus)
 extern "C"
 {
+#endif
     int Prepare(ft800 *Device,
                 int SPIChannel, int SPIConnectionSpeed);
 
@@ -126,7 +128,9 @@ extern "C"
     /* NOTE(js): Execute/Run the commands stored in the display list
      * locally on the FT800 chip. */
     void ExecuteDisplayList(ft800 *Device);
+#if defined(__cplusplus)
 };
+#endif
 
 #define PI3_FT800_H
 #endif

@@ -15,7 +15,7 @@
 static void
 JohannesDemo(ft800 *Device, float dt)
 { 
-    static short int unsigned xOffset = 0.0f;
+    static short int unsigned xOffset = 0;
     xOffset += (int)(dt*100.0f);
     
     PushClear(Device, CLEAR_ALL_BUFFERS, 1.0f, 0.0f, 0.0f);
@@ -52,7 +52,7 @@ JohannesDemo(ft800 *Device, float dt)
 static void
 FTDIDemo(ft800 *Device, float dt)
 {    
-    static short int unsigned xOffset = 0.0f;
+    static short int unsigned xOffset = 0;
     xOffset += (int)(dt*100.0f);
     
     PushClear(Device, CLEAR_ALL_BUFFERS, 0.0f, 0.0f, 0.0f);
