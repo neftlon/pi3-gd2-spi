@@ -1,4 +1,4 @@
-Connect the Gameduino 3 to a Raspberry Pi 3 via the onboard
+Connect the Gameduino 2 to a Raspberry Pi 3 via the onboard
 SPI.
 
 +-------------------------------+
