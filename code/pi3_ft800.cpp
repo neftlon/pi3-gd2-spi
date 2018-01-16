@@ -5,10 +5,11 @@
    $Creator: Johannes Spies $
    $Notice: (C) Copyright 2017. All Rights Reserved. $
    ======================================================================== */
-#include <wiringPi.h>
+#include "pi3_ft800.h"
+
+// TODO(js): Use open or something instead?
 #include <wiringPiSPI.h>
 
-#include <stdio.h>
 #include <unistd.h>
 
 #define MOSI 10
@@ -49,20 +50,18 @@
 
 #define RAM_DL 0x100000
 
-static ft800
-OpenFT800(int Channel, int Speed)
+#define ArrayCount(Array) (sizeof(Array)/sizeof(Array[0]))
+
+static int
+SPIOpenDevice(int Channel, int Speed)
 {
-    ft800 Result = {};
-    Result.FileDesc = wiringPiSPISetup(Channel, Speed);
-    Result.Channel = Channel;
-    return(Result);
+    wiringPiSPISetup(Channel, Speed);
 }
 
-static bool
-IsValid(ft800 *Ptr)
+static void
+SPIReadWrite(ft800 *Device, char unsigned *Buffer, int Length)
 {
-    bool Result = (Ptr->FileDesc != -1);
-    return(Result);
+    wiringPiSPIDataRW(Device->Channel, Buffer, Length);
 }
 
 static void
@@ -86,7 +85,7 @@ HostMemoryWrite(ft800 *Device, int unsigned Address,
         *BufferPtr++ = *DataBuffer++;
     }
     
-    wiringPiSPIDataRW(Device->Channel, Buffer, TotalBufferSize);
+    SPIReadWrite(Device, Buffer, TotalBufferSize);
 }
 
 static void
@@ -103,7 +102,7 @@ HostMemoryRead(ft800 *Device, int unsigned Address,
     Buffer[2] = Address & 0xFF;
     Buffer[3] = 0x00; // NOTE(js): Dummy byte
 
-    wiringPiSPIDataRW(Device->Channel, Buffer, TotalBufferSize);
+    SPIReadWrite(Device, Buffer, TotalBufferSize);
 
     for(int Index = 0;
         Index < DataBufferLength;
@@ -125,7 +124,7 @@ HostCommand(ft800 *Device, char unsigned Command)
     Buffer[0] = Command;
     Buffer[1] = 0x0;
     Buffer[2] = 0x0;
-    wiringPiSPIDataRW(Device->Channel, Buffer, ArrayCount(Buffer));
+    SPIReadWrite(Device, Buffer, ArrayCount(Buffer));
 }
 
 static void
@@ -173,6 +172,79 @@ Read32(ft800 *Device, int unsigned Address)
 }
 
 static void
+EstablishSPIConnection(ft800 *Device, int Channel, int Speed)
+{
+    Device->FileDesc = SPIOpenDevice(Channel, Speed);
+    Device->Channel = Channel;
+    Device->DisplayListPointerOffset = 0;
+}
+
+// TODO(js): Some error handling...?
+static void
+InitDevice(ft800 *Device)
+{
+    HostCommand(Device, 0x62); // CLK_48M Intern
+    HostCommand(Device, 0x00); // ACTIVE
+    // TODO(js): Is this neccessary?
+    usleep(20 * 1000);
+
+    char unsigned ChipID = 0;
+    do
+    {
+        ChipID = Read8(Device, 0x102400);
+        //printf("Checking ChipID... Is 0x%x.\n", ChipID);
+    } while(ChipID != 0x7C);
+    //printf("Done checking ChipID.\n");
+
+    int unsigned ROMChipIDRegister = Read32(Device, ROM_CHIPID);
+    short int ROMChipID = (ROMChipIDRegister >> 16) & 0xFFFF;
+    short int VersionID = ROMChipIDRegister & 0xFFFF;
+    //printf("ROMChipID: %04x, VersionID: %04x\n",
+    //       (int)ROMChipID, (int)VersionID);
+        
+    Write16(Device, REG_HCYCLE, 548);
+    Write16(Device, REG_HOFFSET, 43);
+    Write16(Device, REG_HSYNC0, 0);
+    Write16(Device, REG_HSYNC1, 41);
+        
+    Write16(Device, REG_VCYCLE, 292);
+    Write16(Device, REG_VOFFSET, 12);
+    Write16(Device, REG_VSYNC0, 0);
+    Write16(Device, REG_VSYNC1, 10);
+        
+    Write8(Device, REG_SWIZZLE, 0);
+    Write8(Device, REG_PCLK_POL, 1);
+        
+    Write8(Device, REG_CSPREAD, 1);
+    Write16(Device, REG_HSIZE, 480);
+    Write16(Device, REG_VSIZE, 272);       
+}
+
+int Prepare(ft800 *Device, int SPIChannel, int SPIConnectionSpeed)
+{
+    int Result = 0;
+    if(Device)
+    {
+        EstablishSPIConnection(Device,
+                               SPIChannel, SPIConnectionSpeed);
+        if(Device->FileDesc != -1)
+        {
+            InitDevice(Device);
+            Result = -1; // NOTE(js): Operation/Initialisation failed
+        }
+        else
+        {
+            // TODO(js): Logging -> Failed to open SPI connection
+        }
+    }
+    else
+    {
+        // TODO(js): Logging -> Invalid input
+    }
+    return(Result);
+}
+
+static void
 PushDisplayListCommand(ft800 *Device, int unsigned Command)
 {
     Write32(Device, RAM_DL + Device->DisplayListPointerOffset,
@@ -180,8 +252,7 @@ PushDisplayListCommand(ft800 *Device, int unsigned Command)
     Device->DisplayListPointerOffset += 4;
 }
 
-static void
-ExecuteDisplayList(ft800 *Device)
+void ExecuteDisplayList(ft800 *Device)
 {    
     PushDisplayListCommand(Device, 0x00000000);
 
@@ -197,8 +268,7 @@ ExecuteDisplayList(ft800 *Device)
     Device->DisplayListPointerOffset = 0;
 }
 
-static void
-PushClear(ft800 *Device, float R, float G, float B, float A = 1.0f)
+void PushClear(ft800 *Device, float R, float G, float B, float A)
 {
     char RByte = (char)(R * 255.0f);
     char GByte = (char)(G * 255.0f);
@@ -219,8 +289,7 @@ PushClear(ft800 *Device, float R, float G, float B, float A = 1.0f)
     PushDisplayListCommand(Device, 0x26000004);
 }
 
-static void
-PushVertex2f(ft800 *Device, float x, float y)
+void PushVertex2f(ft800 *Device, float x, float y)
 {
     short int ClampedX = (short int)x & 0x7FFF;
     short int ClampedY = (short int)y & 0x7FFF;
@@ -229,8 +298,7 @@ PushVertex2f(ft800 *Device, float x, float y)
     PushDisplayListCommand(Device, Vertex2fCommand | (ClampedX << 15) | ClampedY);
 }
 
-static void
-PushVertex2i(ft800 *Device, int x, int y, int Handle, int Cell)
+void PushVertex2i(ft800 *Device, int x, int y, int Handle, int Cell)
 {
     int Vertex2iCommand = (0x2 << 30);
     short int ClampedX = (short int)x & 0x1FF;
@@ -244,8 +312,7 @@ PushVertex2i(ft800 *Device, int x, int y, int Handle, int Cell)
                                     ClampedCell));
 }
 
-static void
-BeginPrimitive(ft800 *Device, int PrimitiveType)
+void BeginPrimitive(ft800 *Device, int PrimitiveType)
 {
     char unsigned ClampedPrimitiveType = (char)(PrimitiveType & 0xF);
     int unsigned BeginCommand = 0x1F000000;
@@ -253,8 +320,7 @@ BeginPrimitive(ft800 *Device, int PrimitiveType)
                                     ClampedPrimitiveType));
 }
 
-static void
-EndPrimitive(ft800 *Device)
+void EndPrimitive(ft800 *Device)
 {
     PushDisplayListCommand(Device, 0x21000000);
 }
