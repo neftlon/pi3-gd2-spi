@@ -40,6 +40,9 @@
 #define REG_SOUND    0x102484
 #define REG_PLAY     0x102488
 
+#define CMD_DLSTART  0xFFFFFF00
+#define CMD_SWAP     0xFFFFFF01
+
 #define PLL_FREQUENCY_48MHz 0x62
 #define PLL_FREQUENCY_36MHz 0x61
 #define PLL_FREQUENCY_24MHz 0x64
@@ -51,6 +54,9 @@
 #define RAM_DL 0x100000
 
 #define ArrayCount(Array) (sizeof(Array)/sizeof(Array[0]))
+
+#include <stdio.h>
+#define DebugPrintf(...) printf(__VA_ARGS__)
 
 static int
 SPIOpenDevice(int Channel, int Speed)
@@ -217,12 +223,12 @@ InitDevice(ft800 *Device)
         
     Write8(Device, REG_CSPREAD, 1);
     Write16(Device, REG_HSIZE, 480);
-    Write16(Device, REG_VSIZE, 272);       
+    Write16(Device, REG_VSIZE, 272);
 }
 
 int Prepare(ft800 *Device, int SPIChannel, int SPIConnectionSpeed)
 {
-    int Result = 1;
+    int Result = 0;
     if(Device)
     {
         EstablishSPIConnection(Device,
@@ -230,16 +236,16 @@ int Prepare(ft800 *Device, int SPIChannel, int SPIConnectionSpeed)
         if(Device->FileDesc != -1)
         {
             InitDevice(Device);
-            Result = 0; // NOTE(js): Operation/Initialisation failed
+            Result = 1; // NOTE(js): Operation/Initialisation failed
         }
         else
         {
-            // TODO(js): Logging -> Failed to open SPI connection
+            DebugPrintf("Failed to open SPI connection.");
         }
     }
     else
     {
-        // TODO(js): Logging -> Invalid input
+        DebugPrintf("Invalid input.");
     }
     return(Result);
 }
@@ -256,6 +262,8 @@ void ExecuteDisplayList(ft800 *Device)
 {    
     PushDisplayListCommand(Device, 0x00000000);
 
+    //HostCommand(Device, CMD_SWAP);
+    
     Write8(Device, REG_DLSWAP, 2);
         
     char unsigned GPIODirRegisterValue = Read8(Device, REG_GPIO_DIR);
@@ -268,7 +276,8 @@ void ExecuteDisplayList(ft800 *Device)
     Device->DisplayListPointerOffset = 0;
 }
 
-void PushClear(ft800 *Device, float R, float G, float B, float A)
+void PushClear(ft800 *Device, char unsigned ClearMask,
+               float R, float G, float B, float A)
 {
     char RByte = (char)(R * 255.0f);
     char GByte = (char)(G * 255.0f);
@@ -286,7 +295,7 @@ void PushClear(ft800 *Device, float R, float G, float B, float A)
                            SetClearColorACommand | AColorCode);
 
     // NOTE(js): Clear command
-    PushDisplayListCommand(Device, 0x26000004);
+    PushDisplayListCommand(Device, (0x26000000 | ClearMask));
 }
 
 void PushVertex2f(ft800 *Device, float x, float y)
@@ -310,6 +319,23 @@ void PushVertex2i(ft800 *Device, int x, int y, int Handle, int Cell)
                                     (ClampedY << 12) |
                                     (ClampedHandle << 7) |
                                     ClampedCell));
+}
+
+void SetColorRGB(ft800 *Device,
+                 char unsigned R, char unsigned G, char unsigned B)
+{
+    int unsigned SetColorCommand = 0x4 << 24;
+    int unsigned ClampedColor = ((R << 16) | (G << 8) | B);
+    PushDisplayListCommand(Device, (SetColorCommand |
+                                    ClampedColor));
+}
+
+void SetPointSize(ft800 *Device, short int unsigned Size)
+{
+    short int unsigned ClampedPointSize = (Size & 0x1FFF);
+    int unsigned SetPointSizeCommand = 0x0D000000;
+    PushDisplayListCommand(Device, (SetPointSizeCommand |
+                                    ClampedPointSize));
 }
 
 void BeginPrimitive(ft800 *Device, int PrimitiveType)
